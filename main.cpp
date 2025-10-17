@@ -14,6 +14,7 @@
 #include "Grid.h"
 #include "Simulation.h"
 #include "converter.h"
+#include "Generator.h"
 #include "transformer.h"
 #include <iostream>
 #include <memory>
@@ -378,34 +379,86 @@ void test_ieee9bus() {
     Control control;
     control.dt = 50e-6;          // 50μs时间步长（适配短线路模型）
     control.t_end = 6.0;         // 总仿真时间6秒
-    control.plot_t_start = 1.0;  // 从1秒开始录波
-    control.plot_t_end = 6.0;    // 录波至6秒
-
+    control.plot_t_start = 0.0;  // 从0秒开始录波
+    control.plot_t_end = 4.0;    // 录波至4秒
     const double freq = 50.0;    // 系统频率50Hz
     const double base_kV = 230.0; // 高压侧基准线电压230kV
+    const double base_MVA = 100.0; // 基准功率100MVA
 
     // 2. 建立电网模型（9个节点+接地节点0）
     Grid grid(27);  // 9节点系统含27个相节点（A/B/C各9个）
 
-    // 3. 发电机模型 (连接到节点1-3的A/B/C相)
-    double gen_v_peak = 1.05 * base_kV * std::sqrt(2.0 / 3.0); // 相电压峰值
-    // 节点1(A/B/C)的发电机
-    auto gen1A = std::make_unique<VoltageSource>(1, 0, gen_v_peak, freq, 0.0, 0.001, 20);
-    auto gen1B = std::make_unique<VoltageSource>(2, 0, gen_v_peak, freq, -120.0, 0.001, 20);
-    auto gen1C = std::make_unique<VoltageSource>(3, 0, gen_v_peak, freq, 120.0, 0.001, 20);
-    // 节点2(A/B/C)的发电机
-    auto gen2A = std::make_unique<VoltageSource>(4, 0, gen_v_peak, freq, 0.0, 0.001, 20);
-    auto gen2B = std::make_unique<VoltageSource>(5, 0, gen_v_peak, freq, -120.0, 0.001, 20);
-    auto gen2C = std::make_unique<VoltageSource>(6, 0, gen_v_peak, freq, 120.0, 0.001, 20);
-    // 节点3(A/B/C)的发电机
-    auto gen3A = std::make_unique<VoltageSource>(7, 0, gen_v_peak, freq, 0.0, 0.001, 20);
-    auto gen3B = std::make_unique<VoltageSource>(8, 0, gen_v_peak, freq, -120.0, 0.001, 20);
-    auto gen3C = std::make_unique<VoltageSource>(9, 0, gen_v_peak, freq, 120.0, 0.001, 20);
+    // 3. 发电机模型
+    // IEEE 9节点系统标准参数：
+    // 节点1：平衡节点，V=1.04pu ∠0°
+    // 节点2：PV节点，P=163MW, V=1.025pu
+    // 节点3：PV节点，P=85MW, V=1.025pu
+ 
+    double V1_kV = 1.04 * base_kV / sqrt(3.0);   // 节点1相电压（平衡节点）
+    double V2_kV = 1.025 * base_kV / sqrt(3.0);  // 节点2相电压（PV节点）
+    double V3_kV = 1.025 * base_kV / sqrt(3.0);  // 节点3相电压（PV节点）
+ 
+    // 创建三相发电机组
+    // 节点1 - 平衡节点发电机组（A/B/C三相）
+    auto gen1A = std::make_unique<Generator>(1, Generator::NodeType::SLACK,
+        0.0, V1_kV, 0.0,           // P初值=0MW, V=相电压, θ=0°
+        0.0576, 0.0576, 0.0,       // Xd=Xq=0.0576pu, Ra=0 (简化)
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    auto gen1B = std::make_unique<Generator>(2, Generator::NodeType::SLACK,
+        0.0, V1_kV, -120.0,        // B相滞后120°
+        0.0576, 0.0576, 0.0,
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    auto gen1C = std::make_unique<Generator>(3, Generator::NodeType::SLACK,
+        0.0, V1_kV, 120.0,         // C相超前120°
+        0.0576, 0.0576, 0.0,
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    // 节点2 - PV节点发电机组（A/B/C三相）
+    double P2_MW = 163.0 / 3.0;  // 每相功率（三相均分）
+    auto gen2A = std::make_unique<Generator>(4, Generator::NodeType::PV,
+        P2_MW, V2_kV, 0.0,         // P=54.33MW/相, V=相电压
+        0.1292, 0.1292, 0.0,       // Xd=Xq=0.1292pu
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    auto gen2B = std::make_unique<Generator>(5, Generator::NodeType::PV,
+        P2_MW, V2_kV, -120.0,
+        0.1292, 0.1292, 0.0,
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    auto gen2C = std::make_unique<Generator>(6, Generator::NodeType::PV,
+        P2_MW, V2_kV, 120.0,
+        0.1292, 0.1292, 0.0,
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    // 节点3 - PV节点发电机组（A/B/C三相）
+    double P3_MW = 85.0 / 3.0;   // 每相功率（三相均分）
+    auto gen3A = std::make_unique<Generator>(7, Generator::NodeType::PV,
+        P3_MW, V3_kV, 0.0,         // P=28.33MW/相, V=相电压
+        0.1813, 0.1813, 0.0,       // Xd=Xq=0.1813pu
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    auto gen3B = std::make_unique<Generator>(8, Generator::NodeType::PV,
+        P3_MW, V3_kV, -120.0,
+        0.1813, 0.1813, 0.0,
+        base_kV / sqrt(3.0), base_MVA);
+ 
+    auto gen3C = std::make_unique<Generator>(9, Generator::NodeType::PV,
+        P3_MW, V3_kV, 120.0,
+        0.1813, 0.1813, 0.0,
+        base_kV / sqrt(3.0), base_MVA);
 
     // 保存发电机指针用于录波
     auto gen1A_ptr = gen1A.get();
+    auto gen1B_ptr = gen1B.get();
+    auto gen1C_ptr = gen1C.get();
     auto gen2A_ptr = gen2A.get();
+    auto gen2B_ptr = gen2B.get();
+    auto gen2C_ptr = gen2C.get();
     auto gen3A_ptr = gen3A.get();
+    auto gen3B_ptr = gen3B.get();
+    auto gen3C_ptr = gen3C.get();
 
     // 添加发电机到电网
     grid.addDevice(std::move(gen1A));
@@ -440,21 +493,21 @@ void test_ieee9bus() {
 
     // 5. 输电线路模型 (6条分布参数线路)
     // 线路参数 (每公里值)
-    double R1_per_km = 0.026;    // 正序电阻(Ω/km)
-    double X1_per_km = 0.26;     // 正序电抗(Ω/km)
-    double C1_per_km = 0.012e-6; // 正序电容(F/km)
-    double R0_per_km = 0.08;     // 零序电阻(Ω/km)
-    double X0_per_km = 0.8;      // 零序电抗(Ω/km)
-    double C0_per_km = 0.006e-6; // 零序电容(F/km)
+    const double R1_per_km = 0.026;    // 正序电阻(Ω/km)
+    const double X1_per_km = 0.26;     // 正序电抗(Ω/km)
+    const double C1_per_km = 0.012e-6; // 正序电容(F/km)
+    const double R0_per_km = 0.08;     // 零序电阻(Ω/km)
+    const double X0_per_km = 0.8;      // 零序电抗(Ω/km)
+    const double C0_per_km = 0.006e-6; // 零序电容(F/km)
 
     // 线路拓扑: 起点(A/B/C)、终点(A/B/C)、长度(km)
     std::vector<std::tuple<std::vector<int>, std::vector<int>, double>> lines = {
         {{10, 11, 12}, {19, 20, 21}, 40.0},  // 线路4-7
-        {{10, 11, 12}, {22, 23, 24}, 20.0},  // 线路4-8
-        {{19, 20, 21}, {22, 23, 24}, 20.0},  // 线路7-8
-        {{19, 20, 21}, {25, 26, 27}, 20.0},  // 线路7-9
-        {{22, 23, 24}, {25, 26, 27}, 20.0},  // 线路8-9
-        {{13, 14, 15}, {19, 20, 21}, 30.0}   // 线路5-7
+        {{10, 11, 12}, {25, 26, 27}, 20.0},  // 线路4-9
+        {{13, 14, 15}, {19, 20, 21}, 20.0},  // 线路5-7
+        {{13, 14, 15}, {22, 23, 24}, 20.0},  // 线路5-8
+        {{16, 17, 18}, {22, 23, 24}, 20.0},  // 线路6-8
+        {{16, 17, 18}, {25, 26, 27}, 30.0}   // 线路6-9
     };
 
     for (const auto& line : lines) {
@@ -470,62 +523,55 @@ void test_ieee9bus() {
         double L0 = (X0_per_km * length) / (2 * M_PI * freq);
         double C0 = C0_per_km * length;
 
-        // 使用混合Bergeron-PI-ZIM模型（适合短线路）
-        grid.addDevice(std::make_unique<HBPiZimLine>(
+        // 使用混合Bergeron-PI-ZIM模型
+        grid.addDevice(std::make_unique<PI_line>(
             from_nodes, to_nodes, R1, L1, C1, R0, L0, C0, freq, control.dt));
     }
 
     // 6. 负荷模型 (3个三相负荷)
     // 负荷1: 节点7(A/B/C)
     grid.addDevice(std::make_unique<Load>(
-        std::vector<int>{19, 20, 21}, 100.0, 30.0, base_kV, freq));
+        std::vector<int>{19, 20, 21}, 100.0, 30.0, base_kV, freq, 0));
     // 负荷2: 节点8(A/B/C)
     grid.addDevice(std::make_unique<Load>(
-        std::vector<int>{22, 23, 24}, 100.0, 30.0, base_kV, freq));
+        std::vector<int>{22, 23, 24}, 100.0, 30.0, base_kV, freq, 0));
     // 负荷3: 节点9(A/B/C)
     grid.addDevice(std::make_unique<Load>(
-        std::vector<int>{25, 26, 27}, 100.0, 30.0, base_kV, freq));
+        std::vector<int>{25, 26, 27}, 100.0, 30.0, base_kV, freq, 0));
 
-    // 7. 故障设置 (2.0秒A相接地，3.0秒切除)
-    auto fault = std::make_unique<TwoValueResistor>(19, 0, 1e9, 0.001); // 节点7A相
-    auto fault_ptr = fault.get();
-    const int fault_node = 10;  // 根据实际拓扑修改节点号
-    grid.addDevice(std::move(fault));
-control.events.push_back(FaultEvent{2.0, fault_node, true});   // 施加故障
-control.events.push_back(FaultEvent{3.0, fault_node, false});  // 移除故障
+    // 7. 故障设置 (2.0秒7A相接地，3.0秒切除)
+    const int fault_node = 19; // 节点7A相
+    auto fault_switch = std::make_unique<TwoValueResistor>(fault_node, 0, 1e9, 0.001); // 节点7A相
+    TwoValueResistor* fault_switch_ptr = fault_switch.get();
+    grid.addDevice(std::move(fault_switch));
+    control.events.push_back(FaultEvent{2.0, fault_node, true});   // 施加故障
+    control.events.push_back(FaultEvent{3.0, fault_node, false});  // 移除故障
     // 8. 录波设置
-    Curve curve(control);
+    Curve curve(control,fault_switch_ptr);
     // 记录关键节点电压
     control.addVoltageTrace("Bus7A", 19);
-    control.addVoltageTrace("Bus7B", 20);
-    control.addVoltageTrace("Bus7C", 21);
-    control.addVoltageTrace("Bus8A", 22);
+    // control.addVoltageTrace("Bus7B", 20);
+    // control.addVoltageTrace("Bus7C", 21);
+    // control.addVoltageTrace("Bus8A", 22);
     // 记录发电机电流
-curve.addCurrentTrace("Gen1A", [gen1A_ptr]() { return gen1A_ptr->get_I(); });
-curve.addCurrentTrace("Gen2A", [gen2A_ptr]() { return gen2A_ptr->get_I(); });
-curve.addCurrentTrace("Gen3A", [gen3A_ptr]() { return gen3A_ptr->get_I(); });
-    // 记录负荷功率 
-        // 修正方案：保存设备指针
-// 在创建load时保存指针
-auto load1 = std::make_unique<Load>(std::vector<int>{16, 17, 18},  // 负荷连接的A/B/C相节点
-    50.0,                          // 总有功功率(MW)
-    20.0,                          // 总无功功率(MVAr)
-    base_kV,                       // 线电压(kV)
-    freq,                          // 频率(Hz)
-    0                              // 中性点接地方式
-    );
-auto* load1_ptr = load1.get();  // 保存指针
-grid.addDevice(std::move(load1));
+    curve.addCurrentTrace("Gen1A", [gen1A_ptr]() { return gen1A_ptr->get_I(); });
+    
+    // curve.addCurrentTrace("Gen2A", [gen2A_ptr]() { return gen2A_ptr->get_I(); });
+    // curve.addCurrentTrace("Gen3A", [gen3A_ptr]() { return gen3A_ptr->get_I(); });
 
-// // 后续使用指针访问
-// curve.addPowerTrace("Load1P", [load1_ptr]()  -> double { return load1_ptr->P_total(); },
-//                    "Load1Q", [load1_ptr]()  -> double { return load1_ptr->Q_total(); });
+
     // 9. 启动仿真
-    Simulation simulation(control, grid, curve);
+    Simulation simulation(control, grid, curve,fault_switch_ptr,fault_node);
     // 添加电压源到仿真器
-    simulation.addVoltageSource(gen1A_ptr);
-    simulation.addVoltageSource(gen2A_ptr);
-    simulation.addVoltageSource(gen3A_ptr);
+    // simulation.addVoltageSource(gen1A_ptr);
+    // simulation.addVoltageSource(gen1B_ptr);
+    // simulation.addVoltageSource(gen1C_ptr);
+    // simulation.addVoltageSource(gen2A_ptr);
+    // simulation.addVoltageSource(gen2B_ptr);
+    // simulation.addVoltageSource(gen2C_ptr);
+    // simulation.addVoltageSource(gen3A_ptr);
+    // simulation.addVoltageSource(gen3B_ptr); 
+    // simulation.addVoltageSource(gen3C_ptr);
     simulation.run();
 }
 
@@ -534,7 +580,7 @@ int main()
 {
     // test_converter();
     // test_two_transformers_inrush();
-    //  test_simple();
+    // test_simple();
     test_ieee9bus();
     return 0;
 }

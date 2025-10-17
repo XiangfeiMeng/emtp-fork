@@ -42,6 +42,7 @@ add_executable(emtp_sim
     converter.cpp
     KluSolverEigen.cpp
     transformer.cpp
+    Generator.cpp  
 )
 
 # 7) 链接库（注意这里的 target 是 emtp_sim，不是 emtp）

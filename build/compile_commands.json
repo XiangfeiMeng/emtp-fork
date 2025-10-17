@@ -52,5 +52,11 @@
   "command": "/usr/bin/g++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP/src -isystem /usr/include/eigen3 -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/transformer.cpp.o -c /home/mxf/coding/EMTP/transformer.cpp",
   "file": "/home/mxf/coding/EMTP/transformer.cpp",
   "output": "CMakeFiles/emtp_sim.dir/transformer.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP/build",
+  "command": "/usr/bin/g++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP/src -isystem /usr/include/eigen3 -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/Generator.cpp.o -c /home/mxf/coding/EMTP/Generator.cpp",
+  "file": "/home/mxf/coding/EMTP/Generator.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/Generator.cpp.o"
 }
 ]
