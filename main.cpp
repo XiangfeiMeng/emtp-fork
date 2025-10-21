@@ -400,53 +400,44 @@ void test_ieee9bus() {
  
     // 创建三相发电机组
     // 节点1 - 平衡节点发电机组（A/B/C三相）
-    auto gen1A = std::make_unique<Generator>(1, Generator::NodeType::SLACK,
+    auto gen1A = std::make_unique<Generator>(1, 0, Generator::NodeType::SLACK,
         0.0, V1_kV, 0.0,           // P初值=0MW, V=相电压, θ=0°
-        0.0576, 0.0576, 0.0,       // Xd=Xq=0.0576pu, Ra=0 (简化)
         base_kV / sqrt(3.0), base_MVA);
- 
-    auto gen1B = std::make_unique<Generator>(2, Generator::NodeType::SLACK,
+
+    auto gen1B = std::make_unique<Generator>(2, 0, Generator::NodeType::SLACK,
         0.0, V1_kV, -120.0,        // B相滞后120°
-        0.0576, 0.0576, 0.0,
         base_kV / sqrt(3.0), base_MVA);
  
-    auto gen1C = std::make_unique<Generator>(3, Generator::NodeType::SLACK,
+    auto gen1C = std::make_unique<Generator>(3, 0, Generator::NodeType::SLACK,
         0.0, V1_kV, 120.0,         // C相超前120°
-        0.0576, 0.0576, 0.0,
         base_kV / sqrt(3.0), base_MVA);
  
     // 节点2 - PV节点发电机组（A/B/C三相）
     double P2_MW = 163.0 / 3.0;  // 每相功率（三相均分）
-    auto gen2A = std::make_unique<Generator>(4, Generator::NodeType::PV,
+    auto gen2A = std::make_unique<Generator>(4, 0, Generator::NodeType::PV,
         P2_MW, V2_kV, 0.0,         // P=54.33MW/相, V=相电压
-        0.1292, 0.1292, 0.0,       // Xd=Xq=0.1292pu
         base_kV / sqrt(3.0), base_MVA);
- 
-    auto gen2B = std::make_unique<Generator>(5, Generator::NodeType::PV,
+
+    auto gen2B = std::make_unique<Generator>(5, 0, Generator::NodeType::PV,
         P2_MW, V2_kV, -120.0,
-        0.1292, 0.1292, 0.0,
         base_kV / sqrt(3.0), base_MVA);
  
-    auto gen2C = std::make_unique<Generator>(6, Generator::NodeType::PV,
+    auto gen2C = std::make_unique<Generator>(6, 0, Generator::NodeType::PV,
         P2_MW, V2_kV, 120.0,
-        0.1292, 0.1292, 0.0,
         base_kV / sqrt(3.0), base_MVA);
  
     // 节点3 - PV节点发电机组（A/B/C三相）
     double P3_MW = 85.0 / 3.0;   // 每相功率（三相均分）
-    auto gen3A = std::make_unique<Generator>(7, Generator::NodeType::PV,
+    auto gen3A = std::make_unique<Generator>(7, 0, Generator::NodeType::PV,
         P3_MW, V3_kV, 0.0,         // P=28.33MW/相, V=相电压
-        0.1813, 0.1813, 0.0,       // Xd=Xq=0.1813pu
         base_kV / sqrt(3.0), base_MVA);
- 
-    auto gen3B = std::make_unique<Generator>(8, Generator::NodeType::PV,
+
+    auto gen3B = std::make_unique<Generator>(8, 0, Generator::NodeType::PV,
         P3_MW, V3_kV, -120.0,
-        0.1813, 0.1813, 0.0,
         base_kV / sqrt(3.0), base_MVA);
- 
-    auto gen3C = std::make_unique<Generator>(9, Generator::NodeType::PV,
+
+    auto gen3C = std::make_unique<Generator>(9, 0, Generator::NodeType::PV,
         P3_MW, V3_kV, 120.0,
-        0.1813, 0.1813, 0.0,
         base_kV / sqrt(3.0), base_MVA);
 
     // 保存发电机指针用于录波
@@ -550,28 +541,27 @@ void test_ieee9bus() {
     Curve curve(control,fault_switch_ptr);
     // 记录关键节点电压
     control.addVoltageTrace("Bus7A", 19);
-    // control.addVoltageTrace("Bus7B", 20);
-    // control.addVoltageTrace("Bus7C", 21);
-    // control.addVoltageTrace("Bus8A", 22);
+    control.addVoltageTrace("Bus7B", 20);
+    control.addVoltageTrace("Bus7C", 21);
+    control.addVoltageTrace("Bus8A", 22);
     // 记录发电机电流
     curve.addCurrentTrace("Gen1A", [gen1A_ptr]() { return gen1A_ptr->get_I(); });
-    
-    // curve.addCurrentTrace("Gen2A", [gen2A_ptr]() { return gen2A_ptr->get_I(); });
-    // curve.addCurrentTrace("Gen3A", [gen3A_ptr]() { return gen3A_ptr->get_I(); });
+    curve.addCurrentTrace("Gen2A", [gen2A_ptr]() { return gen2A_ptr->get_I(); });
+    curve.addCurrentTrace("Gen3A", [gen3A_ptr]() { return gen3A_ptr->get_I(); });
 
 
     // 9. 启动仿真
     Simulation simulation(control, grid, curve,fault_switch_ptr,fault_node);
     // 添加电压源到仿真器
-    // simulation.addVoltageSource(gen1A_ptr);
-    // simulation.addVoltageSource(gen1B_ptr);
-    // simulation.addVoltageSource(gen1C_ptr);
-    // simulation.addVoltageSource(gen2A_ptr);
-    // simulation.addVoltageSource(gen2B_ptr);
-    // simulation.addVoltageSource(gen2C_ptr);
-    // simulation.addVoltageSource(gen3A_ptr);
-    // simulation.addVoltageSource(gen3B_ptr); 
-    // simulation.addVoltageSource(gen3C_ptr);
+    simulation.addGenerator(gen1A_ptr);
+    simulation.addGenerator(gen1B_ptr);
+    simulation.addGenerator(gen1C_ptr);
+    simulation.addGenerator(gen2A_ptr);
+    simulation.addGenerator(gen2B_ptr);
+    simulation.addGenerator(gen2C_ptr);
+    simulation.addGenerator(gen3A_ptr);
+    simulation.addGenerator(gen3B_ptr); 
+    simulation.addGenerator(gen3C_ptr);
     simulation.run();
 }
 

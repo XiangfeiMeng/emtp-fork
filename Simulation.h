@@ -14,6 +14,7 @@
 
 #pragma once
 #include "Control.h"
+#include "Generator.h"
 #include "Curve.h"
 #include "Devices.h"
 #include "Grid.h"
@@ -51,6 +52,7 @@ public:
 
     void addVoltageSource(VoltageSource* src) { sources.push_back(src); } /// 注册电压源指针，用于在事件触发时修改幅值/频偏
 
+    void addGenerator(Generator* gen) { generators.push_back(gen); }
 private:
     Control& ctrl;
     Grid& grid;
@@ -65,4 +67,6 @@ private:
     std::vector<CircuitBreakerPhase*> breakers;
 
     std::vector<VoltageSource*> sources; // 新增
+
+    std::vector<Generator*> generators; ///< 存储发电机指针
 };
