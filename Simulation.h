@@ -14,7 +14,6 @@
 
 #pragma once
 #include "Control.h"
-#include "Generator.h"
 #include "Curve.h"
 #include "Devices.h"
 #include "Grid.h"
@@ -43,6 +42,7 @@ public:
 
     /// @brief 启动并运行整个仿真。
     void run();
+    void run(const Eigen::VectorXd& initial_predictor_voltage);
 
     /**
      * @brief 注册一个断路器到仿真器中，以便在循环中处理其时序逻辑。
@@ -52,7 +52,6 @@ public:
 
     void addVoltageSource(VoltageSource* src) { sources.push_back(src); } /// 注册电压源指针，用于在事件触发时修改幅值/频偏
 
-    void addGenerator(Generator* gen) { generators.push_back(gen); }
 private:
     Control& ctrl;
     Grid& grid;
@@ -68,5 +67,4 @@ private:
 
     std::vector<VoltageSource*> sources; // 新增
 
-    std::vector<Generator*> generators; ///< 存储发电机指针
 };

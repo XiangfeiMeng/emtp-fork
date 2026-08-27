@@ -16,6 +16,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <complex>
 #include <memory>
 #include <string>
 #include <vector>
@@ -24,6 +25,14 @@ using std::string;
 using std::vector;
 
 struct Transformer_para {
+    bool directParametersEnabled { false };
+    double directR1 { 0.0 };
+    double directL1 { 0.0 };
+    double directR2 { 0.0 };
+    double directL2 { 0.0 };
+    double directRm { 0.0 };
+    double directLm { 0.0 };
+
     // —— 名牌/额定参数 ——
     double load { 50.0 }; // 额定容量 MVA
     double freq { 50.0 }; // 额定频率 Hz
@@ -89,6 +98,12 @@ public:
     }
     bool isSaturated() const;
     double i_mag_now() const;
+    void setInitialState(double history, double previousVoltage)
+    {
+        i_hist_ = history;
+        v_hist_ = previousVoltage;
+        psi_ = previousVoltage / (2.0 * 3.141592653589793 * 60.0);
+    }
 
 private:
     double t_now_;
@@ -124,8 +139,8 @@ public:
     int kp { 0 }, mp { 0 }, js { 0 }, ls { 0 };
     // 理想变压器约束的拉格朗日变量（用作额外未知量）
     int extra { 0 };
-    std::unique_ptr<class series_RL> Zp; // #1侧串联漏抗(一半)
-    std::unique_ptr<class series_RL> Zs; // #2侧串联漏抗(一半，折算)
+    std::unique_ptr<Device> Zp;
+    std::unique_ptr<Device> Zs;
     std::unique_ptr<NLmag> mag; // 励磁（接在#1侧）
     double a_eff { 1.0 }; // 本相有效变比
     std::string name;
@@ -140,6 +155,8 @@ public:
     void stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt) override;
     void updateHistory(Eigen::VectorXd& I, double t, double dt) override;
     void updateState(const Eigen::VectorXd& V, double dt) override;
+    void setPowerFlowInitialState(std::complex<double> primaryPhaseARms,
+        std::complex<double> secondaryPhaseARms, double timeSec, double dt);
 
     // —— 非线性段切换全局标志（Simulation 轮询） ——
     static bool consumeRefactorFlag() { return s_needRefactor.exchange(false); }
@@ -169,10 +186,16 @@ private:
     int n2_neu_ { 0 };
 
     std::array<SP_Unit, 3> ph_;
+    bool has_power_flow_initial_state_ { false };
+    std::array<double, 3> initial_secondary_history_ {};
+    std::array<double, 3> initial_secondary_voltage_ {};
+    std::array<double, 3> initial_magnetizing_history_ {};
+    std::array<double, 3> initial_magnetizing_voltage_ {};
 
     // 由名牌得到（折到#1侧）
     double R_eq_ { 0.0 }, X_eq_ { 0.0 };
     double Rm_ { 0.0 }, Lm_lin_ { 0.0 };
+    double R1_ { 0.0 }, L1_ { 0.0 }, R2_ { 0.0 }, L2_ { 0.0 };
     double Lm_air_ { 0.0 };
     double psi_knee_ { 0.0 };
 

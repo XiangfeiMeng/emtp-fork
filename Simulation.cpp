@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <variant>
 
 Simulation::Simulation(Control& ctrl, Grid& grid, Curve& curve, TwoValueResistor* fault_switch, int fault_node)
@@ -28,6 +29,11 @@ Simulation::Simulation(Control& ctrl, Grid& grid, Curve& curve)
 
 void Simulation::run()
 {
+    run(Eigen::VectorXd());
+}
+
+void Simulation::run(const Eigen::VectorXd& initial_predictor_voltage)
+{
     std::cout << "Starting simulation..." << std::endl;
     auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -44,6 +50,13 @@ void Simulation::run()
     int num_steps = static_cast<int>(ctrl.t_end / ctrl.dt);
     Eigen::VectorXd V(grid.getNumNodes());
     V.setZero();
+    if (initial_predictor_voltage.size() != 0) {
+        if (initial_predictor_voltage.size() != grid.getNumNodes()) {
+            throw std::invalid_argument("initial predictor voltage size does not match grid");
+        }
+        V = initial_predictor_voltage;
+        grid.updateDeviceStates(V, ctrl.dt);
+    }
     Eigen::VectorXd I(grid.getNumNodes());
     I.setZero();
 
@@ -114,6 +127,7 @@ void Simulation::run()
 
         //  更新设备状态（这里可能触发“励磁段切换”标志）
         grid.updateDeviceStates(V, ctrl.dt);
+
 
         //  断路器过零开断（若改变，重建一次）
         bool changed_post = false;

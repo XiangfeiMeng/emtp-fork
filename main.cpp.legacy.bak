@@ -15,8 +15,7 @@
 #include "Simulation.h"
 #include "converter.h"
 #include "transformer.h"
-#include "PowerFlow.h"
-#include "PowerFlowInit.h"
+#include "PowerFlowLegacy.h"
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -375,88 +374,65 @@ void test_two_transformers_inrush()
 
     sim.run();
 }
-void test_ieee9bus()
-{
+void test_ieee9bus() {
     std::cout << "--- EMTP Simulation for IEEE 9-Bus System ---\n";
 
-    // 1. 仿真参数和节点布局
+    // 1. 仿真控制参数设置
     Control control;
     control.dt = 1e-6;
     control.t_end = 4.0;
-    control.plot_t_start = 0.0;
-    control.plot_t_end = 4.0;
-
+    control.plot_t_start = 0;
+    control.plot_t_end = 4;
     const double freq = 60.0;
-    const double base_kV = 230.0;
+    const double base_kV = 230.0; // 高压侧基准线电压230kV
+    const double base_MVA = 100.0; // 基准功率100MVA
 
-    // 外部节点：9 个母线 × 3 相 = 27 个节点
+    // 2. 建立电网模型（9个节点+接地节点0）
     Grid grid(27);
 
-    // 2. 电源参数
-    const double v_line[] = {
-        17.16,
-        18.45,
-        14.145
-    };
+    // 3. 发电机模型
+    const double v_line_1 = 17.16;
+    const double v_line_2 = 18.45;
+    const double v_line_3 = 14.145;
+    double v_peak_1 = v_line_1 * sqrt(2.0 / 3.0);
+    double v_peak_2 = v_line_2 * sqrt(2.0 / 3.0);
+    double v_peak_3 = v_line_3 * sqrt(2.0 / 3.0);
 
-    const double phase[] = {
-        0.0,
-        9.28001,
-        4.66475
-    };
+    double phase_1 = 0.0;  
+    double phase_2 = 9.28001; 
+    double phase_3 = 4.66475; 
+    double rs = 0.001;
+    double isc_peak_1 = 81.453;
+    double isc_peak_2 = 211.22;
+    double isc_peak_3 = 239.627;
+    // 创建三相发电机组
+    // 节点1 - 平衡节点发电机组（A/B/C三相）
+    auto gen1A = std::make_unique<VoltageSource>(1, 0, v_peak_1, freq, phase_1, rs, isc_peak_1);
+    auto gen1B = std::make_unique<VoltageSource>(2, 0, v_peak_1, freq, phase_1-120.0, rs, isc_peak_1);
+    auto gen1C = std::make_unique<VoltageSource>(3, 0, v_peak_1, freq, phase_1+120.0, rs, isc_peak_1);
 
-    const double isc_peak[] = {
-        81.453,
-        211.22,
-        239.627
-    };
+    // 节点2 - PV节点发电机组（A/B/C三相）
+    auto gen2A = std::make_unique<VoltageSource>(4, 0, v_peak_2, freq, phase_2, rs, isc_peak_2);
+    auto gen2B = std::make_unique<VoltageSource>(5, 0, v_peak_2, freq, phase_2-120.0, rs, isc_peak_2);
+    auto gen2C = std::make_unique<VoltageSource>(6, 0, v_peak_2, freq, phase_2+120.0, rs, isc_peak_2);
 
-    const double v_peak[] = {
-        v_line[0] * std::sqrt(2.0 / 3.0),
-        v_line[1] * std::sqrt(2.0 / 3.0),
-        v_line[2] * std::sqrt(2.0 / 3.0)
-    };
+    // 节点3 - PV节点发电机组（A/B/C三相）
+    auto gen3A = std::make_unique<VoltageSource>(7, 0, v_peak_3, freq, phase_3, rs, isc_peak_3);
+    auto gen3B = std::make_unique<VoltageSource>(8, 0, v_peak_3, freq, phase_3-120.0, rs, isc_peak_3);
+    auto gen3C = std::make_unique<VoltageSource>(9, 0, v_peak_3, freq, phase_3+120.0, rs, isc_peak_3);
 
-    const double rs = 0.001;
+    // 保存发电机指针用于录波
+    auto gen1A_ptr = gen1A.get();
+    auto gen1B_ptr = gen1B.get();
+    auto gen1C_ptr = gen1C.get();
+    auto gen2A_ptr = gen2A.get();
+    auto gen2B_ptr = gen2B.get();
+    auto gen2C_ptr = gen2C.get();
+    auto gen3A_ptr = gen3A.get();
+    auto gen3B_ptr = gen3B.get();
+    auto gen3C_ptr = gen3C.get();
 
-    // 3. 创建电源设备
-    auto gen1A = std::make_unique<VoltageSource>(
-        1, 0, v_peak[0], freq, phase[0], rs, isc_peak[0]);
-    auto gen1B = std::make_unique<VoltageSource>(
-        2, 0, v_peak[0], freq, phase[0] - 120.0, rs, isc_peak[0]);
-    auto gen1C = std::make_unique<VoltageSource>(
-        3, 0, v_peak[0], freq, phase[0] + 120.0, rs, isc_peak[0]);
-
-    auto gen2A = std::make_unique<VoltageSource>(
-        4, 0, v_peak[1], freq, phase[1], rs, isc_peak[1]);
-    auto gen2B = std::make_unique<VoltageSource>(
-        5, 0, v_peak[1], freq, phase[1] - 120.0, rs, isc_peak[1]);
-    auto gen2C = std::make_unique<VoltageSource>(
-        6, 0, v_peak[1], freq, phase[1] + 120.0, rs, isc_peak[1]);
-
-    auto gen3A = std::make_unique<VoltageSource>(
-        7, 0, v_peak[2], freq, phase[2], rs, isc_peak[2]);
-    auto gen3B = std::make_unique<VoltageSource>(
-        8, 0, v_peak[2], freq, phase[2] - 120.0, rs, isc_peak[2]);
-    auto gen3C = std::make_unique<VoltageSource>(
-        9, 0, v_peak[2], freq, phase[2] + 120.0, rs, isc_peak[2]);
-
-    VoltageSource* gen1A_ptr = gen1A.get();
-    VoltageSource* gen1B_ptr = gen1B.get();
-    VoltageSource* gen1C_ptr = gen1C.get();
-    VoltageSource* gen2A_ptr = gen2A.get();
-    VoltageSource* gen2B_ptr = gen2B.get();
-    VoltageSource* gen2C_ptr = gen2C.get();
-    VoltageSource* gen3A_ptr = gen3A.get();
-    VoltageSource* gen3B_ptr = gen3B.get();
-    VoltageSource* gen3C_ptr = gen3C.get();
-
-    const std::array<VoltageSource*, 9> source_devices {{
-        gen1A_ptr, gen1B_ptr, gen1C_ptr,
-        gen2A_ptr, gen2B_ptr, gen2C_ptr,
-        gen3A_ptr, gen3B_ptr, gen3C_ptr
-    }};
-
+    // 添加发电机到电网
     grid.addDevice(std::move(gen1A));
     grid.addDevice(std::move(gen1B));
     grid.addDevice(std::move(gen1C));
@@ -467,7 +443,7 @@ void test_ieee9bus()
     grid.addDevice(std::move(gen3B));
     grid.addDevice(std::move(gen3C));
 
-    // 4. 变压器参数
+    // 4. 变压器模型 (3台双绕组变压器)
     Transformer_para t_para_1;
     t_para_1.load = 100.0;
     t_para_1.swinging1Voltage = 16.5;
@@ -486,221 +462,165 @@ void test_ieee9bus()
     t_para_1.directLm = 3.6108;
     t_para_1.saturationEnabled = 0;
 
-    Transformer_para t_para_2 = t_para_1;
+    Transformer_para t_para_2;
+    t_para_2.load = 100.0;
     t_para_2.swinging1Voltage = 18.0;
+    t_para_2.swinging2Voltage = 230.0;
+    t_para_2.swinging1type = 0;
+    t_para_2.swinging2type = 0;
+    t_para_2.swinging1_GROUNDING = 1;
+    t_para_2.swinging2_GROUNDING = 1;
+    t_para_2.freq = freq;
+    t_para_2.directParametersEnabled = true;
     t_para_2.directR1 = 3.24e-6;
+    t_para_2.directL1 = 0.0;
+    t_para_2.directR2 = 5.29e-4;
     t_para_2.directL2 = 8.7701e-2;
     t_para_2.directRm = 1620.0;
     t_para_2.directLm = 4.2972;
+    t_para_2.saturationEnabled = 0;
 
-    Transformer_para t_para_3 = t_para_1;
+    Transformer_para t_para_3;
+    t_para_3.load = 100.0;
     t_para_3.swinging1Voltage = 13.8;
+    t_para_3.swinging2Voltage = 230.0;
+    t_para_3.swinging1type = 0;
+    t_para_3.swinging2type = 0;
+    t_para_3.swinging1_GROUNDING = 1;
+    t_para_3.swinging2_GROUNDING = 1;
+    t_para_3.freq = freq;
+    t_para_3.directParametersEnabled = true;
     t_para_3.directR1 = 1.9044e-6;
+    t_para_3.directL1 = 0.0;
+    t_para_3.directR2 = 5.29e-4;
     t_para_3.directL2 = 8.2228e-2;
     t_para_3.directRm = 952.2;
     t_para_3.directLm = 2.5258;
-
-    // 5. 创建变压器设备
+    t_para_3.saturationEnabled = 0;
+    // 变压器1: 节点1(A/B/C) -> 节点4(A/B/C)
+    const auto power_flow = IEEE9PowerFlowCase::ieee9();
+    const auto power_flow_result = power_flow.solve();
+    if (power_flow_result.relativeResidual > 1.0e-10)
+        throw std::runtime_error("IEEE9 power-flow initialization did not converge");
+    const auto source_histories = power_flow.sourceHistories(-control.dt, control.dt);
+    const std::array<VoltageSource*, 9> source_devices {{
+        gen1A_ptr, gen1B_ptr, gen1C_ptr, gen2A_ptr, gen2B_ptr, gen2C_ptr,
+        gen3A_ptr, gen3B_ptr, gen3C_ptr,
+    }};
+    for (std::size_t index = 0; index < source_devices.size(); ++index)
+        source_devices[index]->setInitialHistory(source_histories[index]);
     auto transformer1 = std::make_unique<Transformer>(
-        std::vector<int>{1, 2, 3},
-        std::vector<int>{10, 11, 12},
-        t_para_1);
-
+        std::vector<int>{1, 2, 3}, std::vector<int>{10, 11, 12}, t_para_1);
     auto transformer2 = std::make_unique<Transformer>(
-        std::vector<int>{4, 5, 6},
-        std::vector<int>{13, 14, 15},
-        t_para_2);
-
+        std::vector<int>{4, 5, 6}, std::vector<int>{13, 14, 15}, t_para_2);
     auto transformer3 = std::make_unique<Transformer>(
-        std::vector<int>{7, 8, 9},
-        std::vector<int>{16, 17, 18},
-        t_para_3);
-
-    Transformer* transformer1_ptr = transformer1.get();
-    Transformer* transformer2_ptr = transformer2.get();
-    Transformer* transformer3_ptr = transformer3.get();
+        std::vector<int>{7, 8, 9}, std::vector<int>{16, 17, 18}, t_para_3);
+        
+    transformer1->setPowerFlowInitialState(power_flow_result.busPhaseARmsKv[0],
+        power_flow_result.busPhaseARmsKv[3], -control.dt, control.dt);
+    transformer2->setPowerFlowInitialState(power_flow_result.busPhaseARmsKv[1],
+        power_flow_result.busPhaseARmsKv[4], -control.dt, control.dt);
+    transformer3->setPowerFlowInitialState(power_flow_result.busPhaseARmsKv[2],
+        power_flow_result.busPhaseARmsKv[5], -control.dt, control.dt);
 
     grid.addDevice(std::move(transformer1));
     grid.addDevice(std::move(transformer2));
     grid.addDevice(std::move(transformer3));
+    // 变压器2: 节点2(A/B/C) -> 节点5(A/B/C)
 
-    // 6. 创建输电线路设备
-    struct Line {
-        std::vector<int> from;
-        std::vector<int> to;
-    };
+    // 变压器3: 节点3(A/B/C) -> 节点6(A/B/C)
 
-    const std::vector<Line> lines {
-        {{10, 11, 12}, {19, 20, 21}},
-        {{10, 11, 12}, {25, 26, 27}},
-        {{13, 14, 15}, {19, 20, 21}},
-        {{13, 14, 15}, {22, 23, 24}},
-        {{16, 17, 18}, {22, 23, 24}},
-        {{16, 17, 18}, {25, 26, 27}}
-    };
 
-    Eigen::Matrix3d Rabc;
-    Rabc << 13.5293831769454, 12.2635478388026, 12.2635478388026,
-            12.2635478388026, 13.5293831769454, 12.2635478388026,
-            12.2635478388026, 12.2635478388026, 13.5293831769454;
+    // 5. 输电线路模型 (6条分布参数线路)
+struct IEEE9LineSpec {
+    const char* name;
+    std::vector<int> from;
+    std::vector<int> to;
+};
+const std::vector<IEEE9LineSpec> lines {
+    {"L1", {10, 11, 12}, {19, 20, 21}},
+    {"L2", {10, 11, 12}, {25, 26, 27}},
+    {"L3", {13, 14, 15}, {19, 20, 21}},
+    {"L4", {13, 14, 15}, {22, 23, 24}},
+    {"L5", {16, 17, 18}, {22, 23, 24}},
+    {"L6", {16, 17, 18}, {25, 26, 27}},
+};
+Eigen::Matrix3d Rabc;
+Rabc << 13.5293831769454, 12.2635478388026, 12.2635478388026,
+        12.2635478388026, 13.5293831769454, 12.2635478388026,
+        12.2635478388026, 12.2635478388026, 13.5293831769454;
+Eigen::Matrix3d Labc;
+Labc << 0.198642487743882, 0.105535006650437, 0.105535006650437,
+        0.105535006650437, 0.198642487743882, 0.105535006650437,
+        0.105535006650437, 0.105535006650437, 0.198642487743882;
+const Eigen::Vector3d Cphase = Eigen::Vector3d::Constant(0.637898940812743e-6);
+constexpr double Cground = 2.99136421769046e-6;
+const auto line_histories = power_flow.piLineHistories(-control.dt, control.dt);
 
-    Eigen::Matrix3d Labc;
-    Labc << 0.198642487743882, 0.105535006650437, 0.105535006650437,
-            0.105535006650437, 0.198642487743882, 0.105535006650437,
-            0.105535006650437, 0.105535006650437, 0.198642487743882;
-
-    const Eigen::Vector3d Cphase =
-        Eigen::Vector3d::Constant(0.637898940812743e-6);
-
-    constexpr double Cground = 2.99136421769046e-6;
-
-    std::vector<PI_line*> line_devices;
-    line_devices.reserve(lines.size());
-
-    for (const auto& line : lines) {
-        auto device = std::make_unique<PI_line>(
-            line.from,
-            line.to,
-            Rabc,
-            Labc,
-            Cphase,
-            Cground,
-            control.dt);
-
-        line_devices.push_back(device.get());
-        grid.addDevice(std::move(device));
-    }
-
-    // 7. 创建负荷设备
-    auto load1 = std::make_unique<Load>(
-        std::vector<int>{19, 20, 21},
-        125.0,
-        50.0,
-        base_kV,
-        freq,
-        0);
-
-    auto load2 = std::make_unique<Load>(
-        std::vector<int>{22, 23, 24},
-        100.0,
-        35.0,
-        base_kV,
-        freq,
-        0);
-
-    auto load3 = std::make_unique<Load>(
-        std::vector<int>{25, 26, 27},
-        90.0,
-        30.0,
-        base_kV,
-        freq,
-        0);
-
-    Load* load1_ptr = load1.get();
-    Load* load2_ptr = load2.get();
-    Load* load3_ptr = load3.get();
-
+for (std::size_t index = 0; index < lines.size(); ++index) {
+    const auto& line = lines[index];
+    auto device = std::make_unique<PI_line>(
+        line.from, line.to, Rabc, Labc, Cphase, Cground, control.dt);
+    const int base = static_cast<int>(11 * index);
+    device->setInitialPhysicalHistory(
+        Eigen::Vector3d(line_histories[base], line_histories[base + 1], line_histories[base + 2]),
+        Eigen::Vector3d(line_histories[base + 3], line_histories[base + 4], line_histories[base + 5]),
+        line_histories[base + 6],
+        Eigen::Vector3d(line_histories[base + 7], line_histories[base + 8], line_histories[base + 9]),
+        line_histories[base + 10]);
+    grid.addDevice(std::move(device));
+}
+    // 6. 负荷模型 (3个三相负荷)
+    // 负荷1: 节点7(A/B/C)
+    auto load1 = std::make_unique<Load>(std::vector<int>{19, 20, 21}, 125.0, 50.0, base_kV, freq, 0);
+    // 负荷2: 节点8(A/B/C)
+    auto load2 = std::make_unique<Load>(std::vector<int>{22, 23, 24}, 100.0, 35.0, base_kV, freq, 0);
+    // 负荷3: 节点9(A/B/C)
+    auto load3 = std::make_unique<Load>(std::vector<int>{25, 26, 27}, 90.0, 30.0, base_kV, freq, 0);
+    const auto load_histories = power_flow.loadHistories(-control.dt, control.dt);
+    load1->setInitialHistory(Eigen::Vector3d(load_histories[0], load_histories[1], load_histories[2]));
+    load2->setInitialHistory(Eigen::Vector3d(load_histories[3], load_histories[4], load_histories[5]));
+    load3->setInitialHistory(Eigen::Vector3d(load_histories[6], load_histories[7], load_histories[8]));
     grid.addDevice(std::move(load1));
     grid.addDevice(std::move(load2));
     grid.addDevice(std::move(load3));
 
-    // 8. 潮流计算
-    const Input pf = makeInput();
-    const Result flow = solve(pf);
-
-    if (flow.residual > 1.0e-10)
-        throw std::runtime_error(
-            "power-flow initialization did not converge");
-
-    // 9. 生成完整 EMTP 初始状态
-    const PFInit::Data data = PFInit::makeData(freq);
-    const PFInit::State init =
-        PFInit::init(flow, data, -control.dt, control.dt);
-
-    // 10. 初始化电源历史项
-    for (std::size_t k = 0; k < source_devices.size(); ++k)
-        source_devices[k]->setInitialHistory(init.source[k]);
-
-    // 11. 初始化变压器状态
-    transformer1_ptr->setPowerFlowInitialState(
-        flow.V(0),
-        flow.V(3),
-        -control.dt,
-        control.dt);
-
-    transformer2_ptr->setPowerFlowInitialState(
-        flow.V(1),
-        flow.V(4),
-        -control.dt,
-        control.dt);
-
-    transformer3_ptr->setPowerFlowInitialState(
-        flow.V(2),
-        flow.V(5),
-        -control.dt,
-        control.dt);
-
-    // 12. 初始化负荷历史项
-    load1_ptr->setInitialHistory(init.load[0]);
-    load2_ptr->setInitialHistory(init.load[1]);
-    load3_ptr->setInitialHistory(init.load[2]);
-
-    // 13. 初始化线路历史项
-    for (std::size_t k = 0; k < line_devices.size(); ++k) {
-        const auto& hist = init.line[k];
-
-        line_devices[k]->setInitialPhysicalHistory(
-            hist.series,
-            hist.phase_i,
-            hist.ground_i,
-            hist.phase_j,
-            hist.ground_j);
-    }
-
-    // 14. 故障和录波
-    const int fault_node = 19;
-
+    // 7. 故障设置 (2.0秒7A相接地，3.0秒切除)
+    const int fault_node = 19; // 节点7A相
     auto fault_switch = std::make_unique<CircuitBreakerPhase>(
-        fault_node,
-        0,
-        1e-3,
-        1e9,
-        false,
-        freq);
-
-    CircuitBreakerPhase* fault_switch_ptr =
-        fault_switch.get();
-
+        fault_node, 0, 1e-3, 1e9, false, freq);
+    CircuitBreakerPhase* fault_switch_ptr = fault_switch.get();
     grid.addDevice(std::move(fault_switch));
-
-    fault_switch_ptr->schedule(
-        2.000001,
-        CircuitBreakerPhase::Change::OpenToClose);
-
-    fault_switch_ptr->schedule(
-        3.0,
-        CircuitBreakerPhase::Change::CloseToOpen);
-
+    fault_switch_ptr->schedule(2.000001, CircuitBreakerPhase::Change::OpenToClose);
+    fault_switch_ptr->schedule(3.0, CircuitBreakerPhase::Change::CloseToOpen);
+    // 8. 录波设置
     Curve curve(control);
+    // 记录关键节点电压
     control.addVoltageTrace("Bus7A", 19);
     control.addVoltageTrace("Gen1A", 1);
+    // 记录发电机电流
+    curve.addCurrentTrace("fault_switch", [fault_switch_ptr]() { return fault_switch_ptr->get_I(); });
 
-    curve.addCurrentTrace(
-        "fault_switch",
-        [fault_switch_ptr]() {
-            return fault_switch_ptr->get_I();
-        });
 
-    // 15. 启动仿真
+
+
+
+    // 9. 启动仿真
     Simulation simulation(control, grid, curve);
-
     simulation.addBreaker(fault_switch_ptr);
-
-    for (auto* source : source_devices)
-        simulation.addVoltageSource(source);
-
-    simulation.run(init.V);
+    // 添加电压源到仿真器
+    simulation.addVoltageSource(gen1A_ptr);
+    simulation.addVoltageSource(gen1B_ptr);
+    simulation.addVoltageSource(gen1C_ptr);
+    simulation.addVoltageSource(gen2A_ptr);
+    simulation.addVoltageSource(gen2B_ptr);
+    simulation.addVoltageSource(gen2C_ptr);
+    simulation.addVoltageSource(gen3A_ptr);
+    simulation.addVoltageSource(gen3B_ptr); 
+    simulation.addVoltageSource(gen3C_ptr);
+    simulation.run(power_flow.initialPredictorVoltages(-control.dt));
 }
+
 
 int main(){
     // test_converter();

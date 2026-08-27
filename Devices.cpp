@@ -350,16 +350,25 @@ VoltageSource::VoltageSource(int n_pos, int n_neu,
     Ls = V_peak / (omega * isc_peak);
 }
 
+void VoltageSource::setInitialHistory(double history)
+{
+    initial_history_ = history;
+    if (series_L)
+        series_L->setInitialHistory(history);
+}
+
 void VoltageSource::allocateNodes(Grid& grid)
 {
     if (n_src > 0)
         return; // 防止重复分配
     // 申请一个内部节点 n_src，用于连接理想源和内阻抗
     n_src = grid.addNode();
-
+    // std::cout << "VoltageSource allocated internal node: " << n_pos << "\n";
+    // std::cout << "VoltageSource allocated internal node: " << n_src << "\n";
     // 创建内部元件
     // 串联电感：n_pos --- Ls --- n_src
     series_L = std::make_unique<Inductor>(n_pos, n_src, Ls);
+    series_L->setInitialHistory(initial_history_);
     // 并联内阻：n_src --- Rs --- n_neu (接地)
     rs_to_gnd = std::make_unique<Resistor>(n_src, n_neu, Rs);
 }
@@ -376,15 +385,11 @@ void VoltageSource::stamp(std::vector<Eigen::Triplet<double>>& triplets, double 
 void VoltageSource::updateHistory(Eigen::VectorXd& I, double t, double dt)
 {
     double k { 1.0 };
-    if (t < 1.0) {
-        k = t;
-    }
 
     // 动态频率与幅值
     double omega_dyn = 2.0 * PI * ((omega / (2.0 * PI)) + delta_freq_); // 将 Hz 偏移加入
     double v_src = k * V_scale_ * V_peak * std::sin(omega_dyn * t + phase_rad);
     double I_src = v_src / Rs;
-
     if (n_src > 0)
         I(n_src - 1) += I_src;
     if (n_neu > 0)
@@ -449,6 +454,16 @@ Load::Load(std::vector<int> nodes_abc,
 }
 
 // 负荷的 stamp, updateHistory, updateState 均委托给其内部的 R, L 元件
+void Load::setInitialHistory(const Eigen::Vector3d& history_abc)
+{
+    if (lA)
+        lA->setInitialHistory(history_abc(0));
+    if (lB)
+        lB->setInitialHistory(history_abc(1));
+    if (lC)
+        lC->setInitialHistory(history_abc(2));
+}
+
 void Load::stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt)
 {
     if (rA)
@@ -613,6 +628,46 @@ PI_line::PI_line(std::vector<int> nodes_i, std::vector<int> nodes_j,
     computeMatrices(dt);
 }
 
+PI_line::PI_line(std::vector<int> nodes_i, std::vector<int> nodes_j,
+    const Eigen::Matrix3d& series_Rabc, const Eigen::Matrix3d& series_Labc,
+    const Eigen::Vector3d& phase_caps, double ground_cap, double dt)
+    : nodes_i(std::move(nodes_i))
+    , nodes_j(std::move(nodes_j))
+    , Rabc(series_Rabc)
+    , Labc(series_Labc)
+    , physical_neutral_caps(true)
+    , Cphase(phase_caps)
+    , Cground(ground_cap)
+{
+    computeMatrices(dt);
+}
+
+
+void PI_line::setInitialHistory(const Eigen::Vector3d& series,
+    const Eigen::Vector3d& shunt_i, const Eigen::Vector3d& shunt_j)
+{
+    i_hist_series = series;
+    i_hist_i = shunt_i;
+    i_hist_j = shunt_j;
+    if (physical_neutral_caps) {
+        i_hist_ground_i = shunt_i.sum();
+        i_hist_ground_j = shunt_j.sum();
+    }
+}
+
+void PI_line::setInitialPhysicalHistory(const Eigen::Vector3d& series,
+    const Eigen::Vector3d& phase_i, double ground_i,
+    const Eigen::Vector3d& phase_j, double ground_j)
+{
+    if (!physical_neutral_caps)
+        throw std::logic_error("physical PI-line history requires explicit neutral capacitors");
+    i_hist_series = series;
+    i_hist_i = phase_i;
+    i_hist_ground_i = ground_i;
+    i_hist_j = phase_j;
+    i_hist_ground_j = ground_j;
+}
+
 void PI_line::computeMatrices(double dt)
 {
     // 串联RL支路的诺顿等效导纳矩阵: G_series = (R_abc + (2/dt) * L_abc)^-1
@@ -620,12 +675,19 @@ void PI_line::computeMatrices(double dt)
     G_series = A.inverse();
 
     // 并联电容支路的诺顿等效导纳矩阵 (两端各一半): G_sh_half = (C_abc/2) / (dt/2) = C_abc/dt
-    G_sh_half = Cabc / dt;
+    if (physical_neutral_caps) {
+        Gphase = (2.0 / dt) * Cphase;
+        Gground = (2.0 / dt) * Cground;
+        physical_cap_denom = Gphase.sum() + Gground;
+        G_sh_half = Gphase.asDiagonal().toDenseMatrix()
+            - (Gphase * Gphase.transpose()) / physical_cap_denom;
+    } else {
+        G_sh_half = Cabc / dt;
+    }
 
     // 历史电流衰减矩阵 Alpha = (I - dt/2 * L^-1*R) * (I + dt/2 * L^-1*R)^-1
-    Eigen::Matrix3d Linv = Labc.inverse();
-    Eigen::Matrix3d K = (dt * 0.5) * (Linv * Rabc);
-    Alpha = (Eigen::Matrix3d::Identity() - K) * (Eigen::Matrix3d::Identity() + K).inverse();
+    A_series_history = G_series * ((2.0 / dt) * Labc - Rabc);
+    B_series_voltage = (Eigen::Matrix3d::Identity() + A_series_history) * G_series;
 }
 
 void PI_line::stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt)
@@ -659,6 +721,7 @@ void PI_line::stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt)
             stamp_block(nodes_i[p], nodes_i[q], +Ypq);
             stamp_block(nodes_j[p], nodes_j[q], +Ypq);
         }
+        
     }
 }
 
@@ -666,7 +729,7 @@ void PI_line::updateHistory(Eigen::VectorXd& I, double /*t*/, double dt)
 {
     // 更新串联支路的历史电流注入
     // i_hist(t) = Alpha * i_hist(t-dt) + (I+Alpha) * G_series * v(t-dt)
-    i_hist_series = Alpha * i_hist_series + (Eigen::Matrix3d::Identity() + Alpha) * (G_series * v_prev_series);
+    i_hist_series = A_series_history * i_hist_series + B_series_voltage * v_prev_series;
 
     for (int p = 0; p < 3; ++p) {
         int ni = nodes_i[p], nj = nodes_j[p];
@@ -678,8 +741,21 @@ void PI_line::updateHistory(Eigen::VectorXd& I, double /*t*/, double dt)
 
     // 更新并联电容的历史电流注入
     // i_hist(t) = -i_hist(t-dt) - 2 * G_sh * v(t-dt)
-    i_hist_i = -i_hist_i - 2.0 * (G_sh_half * v_prev_i);
-    i_hist_j = -i_hist_j - 2.0 * (G_sh_half * v_prev_j);
+    if (physical_neutral_caps) {
+        const double neutral_i = (i_hist_i.sum() + 2.0 * Gphase.dot(v_prev_i)
+            - i_hist_ground_i) / (2.0 * physical_cap_denom);
+        const double neutral_j = (i_hist_j.sum() + 2.0 * Gphase.dot(v_prev_j)
+            - i_hist_ground_j) / (2.0 * physical_cap_denom);
+        const Eigen::Vector3d branch_voltage_i = v_prev_i - Eigen::Vector3d::Constant(neutral_i);
+        const Eigen::Vector3d branch_voltage_j = v_prev_j - Eigen::Vector3d::Constant(neutral_j);
+        i_hist_i = -i_hist_i - 2.0 * Gphase.cwiseProduct(branch_voltage_i);
+        i_hist_j = -i_hist_j - 2.0 * Gphase.cwiseProduct(branch_voltage_j);
+        i_hist_ground_i = -i_hist_ground_i - 2.0 * Gground * neutral_i;
+        i_hist_ground_j = -i_hist_ground_j - 2.0 * Gground * neutral_j;
+    } else {
+        i_hist_i = -i_hist_i - 2.0 * (G_sh_half * v_prev_i);
+        i_hist_j = -i_hist_j - 2.0 * (G_sh_half * v_prev_j);
+    }
     for (int p = 0; p < 3; ++p) {
         int ni = nodes_i[p], nj = nodes_j[p];
         if (ni > 0)

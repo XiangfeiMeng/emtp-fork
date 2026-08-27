@@ -77,7 +77,9 @@ void Curve::sample(double t, const Eigen::VectorXd& V)
             fileI << t;
             for (const auto& ct : curr_traces) {
                 double i = 0.0;
-                if (ct.reader)
+                if (ct.derived_reader)
+                    i = ct.derived_reader(t, V);
+                else if (ct.reader)
                     i = ct.reader();
                 fileI << "\t" << i;
             }

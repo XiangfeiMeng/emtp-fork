@@ -31,6 +31,12 @@ public:
         curr_traces.push_back({ name, std::move(reader) });
     }
 
+    void addDerivedCurrentTrace(const std::string& name,
+        std::function<double(double, const Eigen::VectorXd&)> reader)
+    {
+        curr_traces.push_back({ name, {}, std::move(reader) });
+    }
+
     // 功率采样（每 0.01s）
     void addPowerTrace(const std::string& nameP, std::function<double()> P_reader,
         const std::string& nameQ, std::function<double()> Q_reader)
@@ -42,6 +48,7 @@ private:
     struct CurrTrace {
         std::string name;
         std::function<double()> reader;
+        std::function<double(double, const Eigen::VectorXd&)> derived_reader;
     };
     struct PwrTrace {
         std::string nameP;

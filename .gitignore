@@ -1,1 +1,21 @@
-Miniconda3-latest-Linux-x86_64.sh
+# 构建目录
+build/
+cmake-build-*/
+
+# 编译生成文件
+*.o
+*.obj
+*.exe
+*.out
+CMakeCache.txt
+CMakeFiles/
+
+# IDE 配置
+.vscode/
+.idea/
+*.user
+
+# 本地工具缓存
+.cache/
+.agents/
+.codex/

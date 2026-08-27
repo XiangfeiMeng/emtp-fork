@@ -1,6 +1,7 @@
 #include "transformer.h"
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 
 std::atomic<bool> Transformer::s_needRefactor { false };
 
@@ -67,6 +68,43 @@ Transformer::Transformer(std::vector<int> nodes_i, std::vector<int> nodes_j, Tra
     omega_ = 2.0 * 3.141592653589793 * std::max(1e-3, para_.freq);
 }
 
+void Transformer::setPowerFlowInitialState(std::complex<double> primaryPhaseARms,
+    std::complex<double> secondaryPhaseARms, double timeSec, double dt)
+{
+    if (!para_.directParametersEnabled)
+        throw std::logic_error("power-flow transformer state requires direct parameters");
+    constexpr double pi = 3.14159265358979323846;
+    const double omega = 2.0 * pi * para_.freq;
+    const double ratio = para_.swinging1Voltage / para_.swinging2Voltage;
+    const std::complex<double> yp = 1.0 / std::complex<double>(para_.directR1, omega * para_.directL1);
+    const std::complex<double> ys = 1.0 / std::complex<double>(para_.directR2, omega * para_.directL2);
+    const std::complex<double> ym = 1.0 / para_.directRm
+        + 1.0 / std::complex<double>(0.0, omega * para_.directLm);
+    const std::complex<double> internalPrimary = (yp * primaryPhaseARms
+        + ys * secondaryPhaseARms / ratio) / (yp + ym + ys / (ratio * ratio));
+    const std::complex<double> internalSecondary = internalPrimary / ratio;
+    const std::complex<double> secondaryCurrent = ys * (internalSecondary - secondaryPhaseARms);
+    const std::complex<double> magnetizingCurrent = internalPrimary
+        / std::complex<double>(0.0, omega * para_.directLm);
+    const double secondaryG = 1.0 / (para_.directR2 + 2.0 * para_.directL2 / dt);
+    const double magnetizingG = dt / (2.0 * para_.directLm);
+    const std::complex<double> rotation = std::polar(1.0, omega * timeSec);
+    for (int phase = 0; phase < 3; ++phase) {
+        const double shift = phase == 0 ? 0.0 : (phase == 1 ? -2.0 * pi / 3.0 : 2.0 * pi / 3.0);
+        const std::complex<double> factor = std::polar(1.0, shift) * rotation;
+        const double secondaryVoltage = std::sqrt(2.0) * std::real(
+            (internalSecondary - secondaryPhaseARms) * factor);
+        const double secondaryCurrentNow = std::sqrt(2.0) * std::real(secondaryCurrent * factor);
+        const double magnetizingVoltage = std::sqrt(2.0) * std::real(internalPrimary * factor);
+        const double magnetizingCurrentNow = std::sqrt(2.0) * std::real(magnetizingCurrent * factor);
+        initial_secondary_voltage_[phase] = secondaryVoltage;
+        initial_secondary_history_[phase] = secondaryCurrentNow - secondaryG * secondaryVoltage;
+        initial_magnetizing_voltage_[phase] = magnetizingVoltage;
+        initial_magnetizing_history_[phase] = magnetizingCurrentNow - magnetizingG * magnetizingVoltage;
+    }
+    has_power_flow_initial_state_ = true;
+}
+
 void Transformer::computeParameters()
 {
     auto phase_voltage = [](double Vll, int typeYorDelta) -> double {
@@ -78,6 +116,25 @@ void Transformer::computeParameters()
     // 分接头装在#1侧
     double tap_scale = 1.0 + (para_.ratioTap * 0.01) * (para_.tap_now - para_.tapMid);
     a_eff_ = (V1_ph_ / std::max(1e-6, V2_ph_)) * tap_scale; // n1/n2
+
+    if (para_.directParametersEnabled) {
+        if (para_.directR1 <= 0.0 || para_.directR2 <= 0.0
+            || para_.directL1 < 0.0 || para_.directL2 < 0.0
+            || para_.directRm <= 0.0 || para_.directLm <= 0.0)
+            throw std::invalid_argument("invalid direct transformer R/L parameters");
+        R1_ = para_.directR1;
+        L1_ = para_.directL1;
+        R2_ = para_.directR2;
+        L2_ = para_.directL2;
+        Rm_ = para_.directRm;
+        Lm_lin_ = para_.directLm;
+        Lm_air_ = para_.saturationEnabled
+            ? std::max(1e-12, para_.airCoreReactance) * Lm_lin_
+            : Lm_lin_;
+        const double Vknee = std::max(0.1, para_.kneeVoltage) * V1_ph_;
+        psi_knee_ = Vknee / omega_;
+        return;
+    }
 
     // 额定线电流（#1侧）
     double I1_line = para_.load / std::max(1e-6, std::sqrt(3.0) * para_.swinging1Voltage);
@@ -121,7 +178,7 @@ void Transformer::buildPhaseConnection(Grid& grid)
     if (para_.swinging2type == 0) {
         n2_neu_ = para_.swinging2_GROUNDING ? 0 : grid.addNode();
     }
-
+ 
     auto pair_for_delta = [&](int phase, int sign) -> std::pair<int, int> {
         const int A = 0, B = 1, C = 2;
         if (sign >= 0) { // +30
@@ -164,7 +221,7 @@ void Transformer::buildPhaseConnection(Grid& grid)
                 u.m = nodes_i_[0];
             }
         }
-
+ 
         // #2侧端口
         if (para_.swinging2type == 0) {
             u.j = nodes_j_[p];
@@ -174,6 +231,11 @@ void Transformer::buildPhaseConnection(Grid& grid)
             u.j = pr.first;
             u.l = pr.second;
         }
+ 
+        u.kp = grid.addNode();
+        u.mp = u.m;
+        u.js = grid.addNode();
+        u.ls = u.l;
     }
 }
 
@@ -182,17 +244,36 @@ void Transformer::allocateNodes(Grid& grid)
     computeParameters();
     buildPhaseConnection(grid);
 
-    double Rp_1 = 0.5 * R_eq_;
-    double Xp_1 = 0.5 * X_eq_;
-    double Lp_1 = Xp_1 / omega_;
-    double Rs_2 = (Rp_1) / (a_eff_ * a_eff_);
-    double Ls_2 = (Lp_1) / (a_eff_ * a_eff_);
+    if (!para_.directParametersEnabled) {
+        R1_ = 0.5 * R_eq_;
+        L1_ = 0.5 * X_eq_ / omega_;
+        R2_ = R1_ / (a_eff_ * a_eff_);
+        L2_ = L1_ / (a_eff_ * a_eff_);
+    }
 
+
+ 
     for (int p = 0; p < 3; ++p) {
         auto& u = ph_[p];
-        u.Zp = std::make_unique<series_RL>(u.k, u.m, std::max(1e-6, Rp_1), std::max(1e-6, Lp_1));
-        u.Zs = std::make_unique<series_RL>(u.j, u.l, std::max(1e-6, Rs_2), std::max(1e-6, Ls_2));
-        u.mag = std::make_unique<NLmag>(u.k, u.m, Lm_lin_, Lm_air_, psi_knee_, &s_needRefactor);
+        
+        if (L1_ == 0.0)
+            u.Zp = std::make_unique<Resistor>(u.k, u.kp, R1_);
+        else
+            u.Zp = std::make_unique<series_RL>(u.k, u.kp, R1_, L1_);
+
+        if (L2_ == 0.0)
+            u.Zs = std::make_unique<Resistor>(u.js, u.j, R2_);
+        else
+            u.Zs = std::make_unique<series_RL>(u.js, u.j, R2_, L2_);
+        
+        u.mag = std::make_unique<NLmag>(u.kp, u.mp, 
+                                        Lm_lin_, Lm_air_, 
+                                        psi_knee_, &s_needRefactor);
+        if (has_power_flow_initial_state_) {
+            if (auto* secondary = dynamic_cast<series_RL*>(u.Zs.get()))
+                secondary->setInitialState(initial_secondary_history_[p], initial_secondary_voltage_[p]);
+            u.mag->setInitialState(initial_magnetizing_history_[p], initial_magnetizing_voltage_[p]);
+        }
     }
 }
 
@@ -205,18 +286,18 @@ static inline void add_triplet(std::vector<Eigen::Triplet<double>>& T, int r, in
 void Transformer::stampIdealConstraint(std::vector<Eigen::Triplet<double>>& triplets, const SP_Unit& u) const
 {
     // 修正：理想关系为 (v_k - v_m) - a*(v_j - v_l) = 0
-    add_triplet(triplets, u.k, u.extra, +1.0);
-    add_triplet(triplets, u.m, u.extra, -1.0);
-    add_triplet(triplets, u.j, u.extra, -u.a_eff);
-    add_triplet(triplets, u.l, u.extra, +u.a_eff);
-
-    add_triplet(triplets, u.extra, u.k, +1.0);
-    add_triplet(triplets, u.extra, u.m, -1.0);
-    add_triplet(triplets, u.extra, u.j, -u.a_eff);
-    add_triplet(triplets, u.extra, u.l, +u.a_eff);
-
+    add_triplet(triplets, u.kp, u.extra, +1.0);
+    add_triplet(triplets, u.mp, u.extra, -1.0);
+    add_triplet(triplets, u.js, u.extra, -u.a_eff);
+    add_triplet(triplets, u.ls, u.extra, +u.a_eff);
+ 
+    add_triplet(triplets, u.extra, u.kp, +1.0);
+    add_triplet(triplets, u.extra, u.mp, -1.0);
+    add_triplet(triplets, u.extra, u.js, -u.a_eff);
+    add_triplet(triplets, u.extra, u.ls, +u.a_eff);
+  
     // 为防止 0 主元，给 extra 加一个极小 gmin
-    const double gmin_extra = 1e-6;
+    const double gmin_extra = 1e-9;
     add_triplet(triplets, u.extra, u.extra, gmin_extra);
 }
 
@@ -225,34 +306,33 @@ void Transformer::stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt
     for (auto& u : ph_) {
         // 理想变比约束
         stampIdealConstraint(triplets, u);
-
+ 
         // 漏抗（两侧各一半）
         if (u.Zp)
             u.Zp->stamp(triplets, dt);
         if (u.Zs)
             u.Zs->stamp(triplets, dt);
-
+ 
         // 励磁非线性支路（并联在 k–m）
         if (u.mag)
             u.mag->stamp(triplets, dt);
-
+ 
         // —— 铁损电阻并联（不改头文件，直接以电导形式 stamp） ——
         if (Rm_ > 0.0) {
             double Gm = 1.0 / Rm_;
-            add_triplet(triplets, u.k, u.k, +Gm);
-            add_triplet(triplets, u.m, u.m, +Gm);
-            add_triplet(triplets, u.k, u.m, -Gm);
-            add_triplet(triplets, u.m, u.k, -Gm);
+            add_triplet(triplets, u.kp, u.kp, +Gm);
+            add_triplet(triplets, u.mp, u.mp, +Gm);
+            add_triplet(triplets, u.kp, u.mp, -Gm);
+            add_triplet(triplets, u.mp, u.kp, -Gm);
         }
     }
-
+ 
     // 若#1/#2侧是Y但不接地，则注入极小对地导纳避免悬浮
     if (para_.swinging1type == 0 && !para_.swinging1_GROUNDING && n1_neu_ > 0)
         triplets.emplace_back(n1_neu_ - 1, n1_neu_ - 1, 1.0 / 1e9);
     if (para_.swinging2type == 0 && !para_.swinging2_GROUNDING && n2_neu_ > 0)
         triplets.emplace_back(n2_neu_ - 1, n2_neu_ - 1, 1.0 / 1e9);
 }
-
 void Transformer::updateHistory(Eigen::VectorXd& I, double t, double dt)
 {
     for (auto& u : ph_) {

@@ -119,6 +119,11 @@ public:
     void updateHistory(Eigen::VectorXd& I, double t, double dt) override;
     void updateState(const Eigen::VectorXd& V, double dt) override;
     double get_I() { return i_now; }
+    void setInitialState(double history, double previousVoltage)
+    {
+        i_hist = history;
+        v_hist = previousVoltage;
+    }
 
 private:
     int n1, n2; ///< 连接节点
@@ -149,6 +154,7 @@ public:
     void updateHistory(Eigen::VectorXd& I, double t, double dt) override;
     void updateState(const Eigen::VectorXd& V, double dt) override;
     double get_I() { return i_now; }
+    void setInitialHistory(double history) { i_hist = history; }
 
 private:
     int n1, n2; ///< 连接节点
@@ -322,6 +328,7 @@ public:
     // ==== 新增：运行中调节 ====
     void set_voltage_scale(double s) { V_scale_ = s; } ///< 线性幅值缩放(1.05=+5%)
     void set_freq_offset(double df_Hz) { delta_freq_ = df_Hz; } ///< 频偏(Hz)
+    void setInitialHistory(double history);
 
 private:
     int n_pos, n_neu;
@@ -333,6 +340,7 @@ private:
     // 运行时调节
     double V_scale_ { 1.0 };
     double delta_freq_ { 0.0 };
+    double initial_history_ { 0.0 };
 
     std::unique_ptr<class Resistor> rs_to_gnd;
     std::unique_ptr<class Inductor> series_L;
@@ -365,6 +373,7 @@ public:
     void stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt) override;
     void updateHistory(Eigen::VectorXd& I, double t, double dt) override;
     void updateState(const Eigen::VectorXd& V, double dt) override;
+    void setInitialHistory(const Eigen::Vector3d& history_abc);
 
     // --- 电流查询 ---
     double get_Ia() const;
@@ -433,10 +442,18 @@ public:
         double R1, double L1, double C1,
         double R0, double L0, double C0,
         double freq, double dt);
+    PI_line(std::vector<int> nodes_i, std::vector<int> nodes_j,
+        const Eigen::Matrix3d& Rabc, const Eigen::Matrix3d& Labc,
+        const Eigen::Vector3d& Cphase, double Cground, double dt);
 
     void stamp(std::vector<Eigen::Triplet<double>>& triplets, double dt) override;
     void updateHistory(Eigen::VectorXd& I, double t, double dt) override;
     void updateState(const Eigen::VectorXd& V, double dt) override;
+    void setInitialHistory(const Eigen::Vector3d& series,
+        const Eigen::Vector3d& shunt_i, const Eigen::Vector3d& shunt_j);
+    void setInitialPhysicalHistory(const Eigen::Vector3d& series,
+        const Eigen::Vector3d& phase_i, double ground_i,
+        const Eigen::Vector3d& phase_j, double ground_j);
     void allocateNodes(Grid& grid) override { } // 无内部新节点
 
     // --- 电流查询 (串联支路电流) ---
@@ -452,7 +469,14 @@ private:
     // 离散化后的等效导纳和系数矩阵
     Eigen::Matrix3d G_series; // 串联支路诺顿等效电导 (R + 2/dt L)^-1
     Eigen::Matrix3d G_sh_half; // 半个并联支路诺顿等效电导 C/dt
-    Eigen::Matrix3d Alpha; // 串联支路历史电流衰减矩阵
+    Eigen::Matrix3d A_series_history;
+    Eigen::Matrix3d B_series_voltage;
+    bool physical_neutral_caps { false };
+    Eigen::Vector3d Cphase = Eigen::Vector3d::Zero();
+    double Cground { 0.0 };
+    Eigen::Vector3d Gphase = Eigen::Vector3d::Zero();
+    double Gground { 0.0 };
+    double physical_cap_denom { 0.0 };
 
     // 状态变量
     Eigen::Vector3d v_prev_series = Eigen::Vector3d::Zero();
@@ -461,6 +485,8 @@ private:
 
     Eigen::Vector3d v_prev_i = Eigen::Vector3d::Zero(), i_hist_i = Eigen::Vector3d::Zero();
     Eigen::Vector3d v_prev_j = Eigen::Vector3d::Zero(), i_hist_j = Eigen::Vector3d::Zero();
+    double i_hist_ground_i { 0.0 };
+    double i_hist_ground_j { 0.0 };
 
     /// @brief 根据时间步长 dt 计算内部等效矩阵。
     void computeMatrices(double dt);

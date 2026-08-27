@@ -1,0 +1,62 @@
+[
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/main.cpp.o -c /home/mxf/coding/EMTP_1/main.cpp",
+  "file": "/home/mxf/coding/EMTP_1/main.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/main.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/Control.cpp.o -c /home/mxf/coding/EMTP_1/Control.cpp",
+  "file": "/home/mxf/coding/EMTP_1/Control.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/Control.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/Grid.cpp.o -c /home/mxf/coding/EMTP_1/Grid.cpp",
+  "file": "/home/mxf/coding/EMTP_1/Grid.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/Grid.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/Simulation.cpp.o -c /home/mxf/coding/EMTP_1/Simulation.cpp",
+  "file": "/home/mxf/coding/EMTP_1/Simulation.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/Simulation.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/Curve.cpp.o -c /home/mxf/coding/EMTP_1/Curve.cpp",
+  "file": "/home/mxf/coding/EMTP_1/Curve.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/Curve.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/Devices.cpp.o -c /home/mxf/coding/EMTP_1/Devices.cpp",
+  "file": "/home/mxf/coding/EMTP_1/Devices.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/Devices.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/converter.cpp.o -c /home/mxf/coding/EMTP_1/converter.cpp",
+  "file": "/home/mxf/coding/EMTP_1/converter.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/converter.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/KluSolverEigen.cpp.o -c /home/mxf/coding/EMTP_1/KluSolverEigen.cpp",
+  "file": "/home/mxf/coding/EMTP_1/KluSolverEigen.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/KluSolverEigen.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/transformer.cpp.o -c /home/mxf/coding/EMTP_1/transformer.cpp",
+  "file": "/home/mxf/coding/EMTP_1/transformer.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/transformer.cpp.o"
+},
+{
+  "directory": "/home/mxf/coding/EMTP_1",
+  "command": "/home/mxf/miniconda3/envs/emtp/bin/x86_64-conda-linux-gnu-c++ -DEIGEN_USE_BLAS -I/home/mxf/coding/EMTP_1/src -isystem /home/mxf/miniconda3/envs/emtp/include/eigen3 -fvisibility-inlines-hidden -fmessage-length=0 -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /home/mxf/miniconda3/envs/emtp/include -O3 -DNDEBUG -O3 -DNDEBUG -march=native -std=gnu++20 -o CMakeFiles/emtp_sim.dir/PowerFlowSolver.cpp.o -c /home/mxf/coding/EMTP_1/PowerFlowSolver.cpp",
+  "file": "/home/mxf/coding/EMTP_1/PowerFlowSolver.cpp",
+  "output": "CMakeFiles/emtp_sim.dir/PowerFlowSolver.cpp.o"
+}
+]
